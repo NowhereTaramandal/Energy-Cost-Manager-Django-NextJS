@@ -30,14 +30,66 @@ class EnergyProvider(UUIDModel):
     def __str__(self): return self.name
 
 class EnergyPlan(UUIDModel):
-    TARIFF_TYPES=(("flat","Flat Rate"),("tou","Time of Use"))
-    provider=models.ForeignKey(EnergyProvider,on_delete=models.CASCADE,related_name="plans")
-    name=models.CharField(max_length=150); tariff_type=models.CharField(max_length=10,choices=TARIFF_TYPES,default="flat")
-    daily_supply_charge=models.DecimalField(max_digits=10,decimal_places=4,help_text="AUD per day")
-    description=models.TextField(blank=True); effective_from=models.DateField(null=True,blank=True); effective_to=models.DateField(null=True,blank=True)
-    active=models.BooleanField(default=True)
-    class Meta: unique_together=("provider","name")
-    def __str__(self): return f"{self.provider.name} - {self.name}"
+    TARIFF_TYPES = (("flat", "Flat Rate"), ("tou", "Time of Use"))
+    DATA_SOURCES = (
+        ("demo", "Demonstration"),
+        ("real", "Real-world"),
+    )
+
+
+    provider = models.ForeignKey(
+        EnergyProvider,
+        on_delete=models.CASCADE,
+        related_name="plans"
+    )
+    name = models.CharField(max_length=150)
+    data_source = models.CharField(
+    max_length=10,
+    choices=DATA_SOURCES,
+    default="demo"
+)
+    tariff_type = models.CharField(
+        max_length=10,
+        choices=TARIFF_TYPES,
+        default="flat"
+    )
+
+    daily_supply_charge = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        help_text="AUD per day"
+    )
+
+    description = models.TextField(blank=True)
+
+    effective_from = models.DateField(null=True, blank=True)
+    effective_to = models.DateField(null=True, blank=True)
+
+    # Source and verification information
+    plan_reference = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True
+    )
+    distributor = models.CharField(max_length=150, blank=True)
+    source_url = models.URLField(blank=True)
+    source_checked_at = models.DateField(null=True, blank=True)
+
+    active = models.BooleanField(default=True)
+
+    # class Meta:
+    #     unique_together = ("provider", "name")
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "plan_reference"],
+                name="unique_provider_plan_reference"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.provider.name} - {self.name}"
+
 
 class TariffRate(UUIDModel):
     RATE_TYPES=(("flat","Flat"),("peak","Peak"),("shoulder","Shoulder"),("offpeak","Off-peak"))
@@ -57,11 +109,55 @@ class Comparison(UUIDModel):
     class Meta: ordering=["-created_at"]
 
 class ComparisonResult(UUIDModel):
-    comparison=models.ForeignKey(Comparison,on_delete=models.CASCADE,related_name="results")
-    plan=models.ForeignKey(EnergyPlan,on_delete=models.CASCADE)
-    historical_cost=models.DecimalField(max_digits=12,decimal_places=2)
-    estimated_annual_cost=models.DecimalField(max_digits=12,decimal_places=2)
-    estimated_annual_saving=models.DecimalField(max_digits=12,decimal_places=2,null=True,blank=True)
-    usage_cost=models.DecimalField(max_digits=12,decimal_places=2); supply_cost=models.DecimalField(max_digits=12,decimal_places=2)
-    rank=models.PositiveIntegerField(default=0)
-    class Meta: ordering=["rank","estimated_annual_cost"]
+    comparison = models.ForeignKey(
+        Comparison,
+        on_delete=models.CASCADE,
+        related_name="results"
+    )
+
+    plan = models.ForeignKey(
+        EnergyPlan,
+        on_delete=models.CASCADE
+    )
+
+    plan_snapshot = models.JSONField(
+        default=dict,
+        blank=True
+    )
+
+    historical_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    estimated_annual_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    estimated_annual_saving = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    usage_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    supply_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    rank = models.PositiveIntegerField(
+        default=0
+    )
+
+    class Meta:
+        ordering = [
+            "rank",
+            "estimated_annual_cost"
+        ]

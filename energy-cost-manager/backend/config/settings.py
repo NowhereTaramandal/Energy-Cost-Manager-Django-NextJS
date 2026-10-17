@@ -7,7 +7,7 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = [x.strip() for x in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if x.strip()]
 
-INSTALLED_APPS = [
+INSTALLED_APPS = ["jazzmin",
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "corsheaders", "rest_framework", "rest_framework_simplejwt", "drf_spectacular",
@@ -57,3 +57,20 @@ CSRF_TRUSTED_ORIGINS=CORS_ALLOWED_ORIGINS
 EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL="noreply@energycostmanager.local"
 FRONTEND_URL=os.getenv("FRONTEND_URL","http://localhost:3000")
+
+# Django Admin session security
+
+# Session expires after 30 minutes
+SESSION_COOKIE_AGE = 1800
+
+# Do not extend the expiry on every request
+SESSION_SAVE_EVERY_REQUEST = False
+
+# Session cookie expires when browser closes
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Prevent JavaScript from reading the session cookie
+SESSION_COOKIE_HTTPONLY = True
+
+# Same-site cookie protection
+SESSION_COOKIE_SAMESITE = "Lax"

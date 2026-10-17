@@ -1,1 +1,56 @@
-"use client";import {FormEvent,useState} from "react";import api from "@/lib/api";export default function Forgot(){const[email,setEmail]=useState("");const[msg,setMsg]=useState("");async function submit(e:FormEvent){e.preventDefault();const r=await api.post("/auth/forgot-password/",{email});setMsg(r.data.detail)}return <div className="min-h-screen grid place-items-center p-6"><form onSubmit={submit} className="card p-7 max-w-md w-full"><h1 className="text-2xl font-bold">Reset password</h1><p className="muted my-3">Enter your email. In development the reset email appears in the Django console.</p>{msg&&<p className="bg-emerald-50 p-3 rounded-lg mb-3">{msg}</p>}<input className="field mb-4" type="email" value={email} onChange={e=>setEmail(e.target.value)} required/><button className="btn btn-primary w-full">Send reset link</button></form></div>}
+
+"use client";
+
+import { FormEvent, useState } from "react";
+import api from "@/lib/api";
+
+export default function Forgot() {
+    const [email, setEmail] = useState("");
+    const [msg, setMsg] = useState("");
+
+    async function submit(e: FormEvent) {
+        e.preventDefault();
+
+        const r = await api.post("/auth/forgot-password/", {
+            email,
+        });
+
+        setMsg(r.data.detail);
+    }
+
+    return (
+        <div className="min-h-screen grid place-items-center p-6">
+            <form
+                onSubmit={submit}
+                className="card p-7 max-w-md w-full"
+            >
+                <h1 className="text-2xl font-bold">
+                    Reset password
+                </h1>
+
+                <p className="muted my-3">
+                    Enter your email. In development the reset
+                    email appears in the Django console.
+                </p>
+
+                {msg && (
+                    <p className="bg-emerald-50 p-3 rounded-lg mb-3">
+                        {msg}
+                    </p>
+                )}
+
+                <input
+                    className="field mb-4"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                />
+
+                <button className="btn btn-primary w-full">
+                    Send reset link
+                </button>
+            </form>
+        </div>
+    );
+}

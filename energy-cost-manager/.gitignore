@@ -14,3 +14,15 @@ frontend/.env.local
 .DS_Store
 .vscode/
 .idea/
+
+# Sensitive credentials
+credentials.txt
+**/credentials.txt
+
+# Local database backups
+backend/db_before_our_changes.sqlite3
+backend/*.sqlite3
+
+# Large or external datasets
+sample-data/Partitioned LCL Data/
+sample-data/Partitioned LCL Data.zip

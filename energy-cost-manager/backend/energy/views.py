@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from .models import *
 from .serializers import *
 from .services import process_upload, analytics_for_upload, create_comparison
+from django.db.models import Q
+from django.utils import timezone
 
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
@@ -34,9 +36,38 @@ class ProviderViewSet(viewsets.ModelViewSet):
     def get_permissions(self): return [permissions.IsAdminUser()] if self.action in ("create","update","partial_update","destroy") else [permissions.IsAuthenticated()]
 
 class PlanViewSet(viewsets.ModelViewSet):
-    serializer_class=EnergyPlanSerializer
-    def get_queryset(self): return EnergyPlan.objects.filter(active=True,provider__active=True).select_related("provider").prefetch_related("rates")
-    def get_permissions(self): return [permissions.IsAdminUser()] if self.action in ("create","update","partial_update","destroy") else [permissions.IsAuthenticated()]
+    serializer_class = EnergyPlanSerializer
+
+    def get_queryset(self):
+        today = timezone.localdate()
+
+        return (
+            EnergyPlan.objects.filter(
+                active=True,
+                provider__active=True
+            )
+            .filter(
+                Q(effective_from__isnull=True) |
+                Q(effective_from__lte=today)
+            )
+            .filter(
+                Q(effective_to__isnull=True) |
+                Q(effective_to__gte=today)
+            )
+            .select_related("provider")
+            .prefetch_related("rates")
+        )
+
+    def get_permissions(self):
+        if self.action in (
+            "create",
+            "update",
+            "partial_update",
+            "destroy"
+        ):
+            return [permissions.IsAdminUser()]
+
+        return [permissions.IsAuthenticated()]
 
 class ComparisonListView(generics.ListAPIView):
     serializer_class=ComparisonSerializer
@@ -50,10 +81,33 @@ class ComparisonDetailView(generics.RetrieveAPIView):
 def compare(request):
     upload=get_object_or_404(UsageUpload,id=request.data.get("upload_id"),user=request.user,status="ready")
     current=None
-    if request.data.get("current_plan_id"): current=get_object_or_404(EnergyPlan,id=request.data["current_plan_id"])
-    try: comp=create_comparison(request.user,upload,current)
-    except ValueError as e: return Response({"detail":str(e)},status=400)
-    return Response(ComparisonSerializer(comp).data,status=201)
+    if request.data.get("current_plan_id"):
+        current = get_object_or_404(
+            EnergyPlan,
+            id=request.data["current_plan_id"]
+        )
+
+    try:
+        comp, skipped_plans = create_comparison(
+            request.user,
+            upload,
+            current
+        )
+
+    except ValueError as e:
+        return Response(
+            {"detail": str(e)},
+            status=400
+        )
+
+    data = ComparisonSerializer(comp).data
+
+    data["skipped_plans"] = skipped_plans
+
+    return Response(
+        data,
+        status=201
+    )
 
 @api_view(["GET"])
 def comparison_report(request,pk):
@@ -61,4 +115,166 @@ def comparison_report(request,pk):
     response=HttpResponse(content_type="text/csv"); response["Content-Disposition"]=f'attachment; filename="comparison-{comp.id}.csv"'
     w=csv.writer(response); w.writerow(["Rank","Provider","Plan","Historical cost","Estimated annual cost","Estimated annual saving"])
     for r in comp.results.select_related("plan__provider").all(): w.writerow([r.rank,r.plan.provider.name,r.plan.name,r.historical_cost,r.estimated_annual_cost,r.estimated_annual_saving or ""])
+    return response
+
+
+@api_view(["GET"])
+def comparison_analytics_report(request, pk):
+    comp = get_object_or_404(
+        Comparison,
+        id=pk,
+        user=request.user
+    )
+
+    upload = comp.upload
+
+    if upload.status != "ready":
+        return Response(
+            {
+                "detail": "Usage data is not ready for analytics."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    usage_analytics = analytics_for_upload(upload)
+
+    response = HttpResponse(
+        content_type="text/csv"
+    )
+
+    response["Content-Disposition"] = (
+        f'attachment; filename="usage-analytics-{comp.id}.csv"'
+    )
+
+    writer = csv.writer(response)
+
+    # --------------------------------------------------
+    # REPORT INFORMATION
+    # --------------------------------------------------
+
+    writer.writerow([
+        "Energy Cost Manager - Usage Analytics",
+        ""
+    ])
+
+    writer.writerow([
+        "Usage file",
+        upload.original_name
+    ])
+
+    writer.writerow([
+        "Analysis created from comparison",
+        comp.created_at
+    ])
+
+    writer.writerow([])
+
+    # --------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------
+
+    writer.writerow([
+        "SUMMARY",
+        ""
+    ])
+
+    writer.writerow([
+        "Metric",
+        "Value"
+    ])
+
+    writer.writerow([
+        "Total consumption (kWh)",
+        usage_analytics["total_kwh"]
+    ])
+
+    writer.writerow([
+        "Average daily consumption (kWh)",
+        usage_analytics["average_daily_kwh"]
+    ])
+
+    #peak usage hour
+    peak_hours = usage_analytics["peak_hours"]
+    peak_hours_text = ", ".join(
+        f"{hour:02d}:00"
+        for hour in peak_hours
+    )
+
+    writer.writerow([
+        "Peak usage hour(s)",
+        peak_hours_text
+    ])
+
+    writer.writerow([])
+
+    # --------------------------------------------------
+    # DAILY CONSUMPTION
+    # --------------------------------------------------
+
+    writer.writerow([
+        "DAILY CONSUMPTION",
+        ""
+    ])
+
+    writer.writerow([
+        "Date",
+        "Consumption (kWh)"
+    ])
+
+    for item in usage_analytics["daily"]:
+        writer.writerow([
+            item["date"],
+            item["kwh"]
+        ])
+
+    writer.writerow([])
+
+    # --------------------------------------------------
+    # MONTHLY CONSUMPTION
+    # --------------------------------------------------
+
+    writer.writerow([
+        "MONTHLY CONSUMPTION",
+        ""
+    ])
+
+    writer.writerow([
+        "Month",
+        "Consumption (kWh)"
+    ])
+
+    for item in usage_analytics["monthly"]:
+        writer.writerow([
+            item["month"],
+            item["kwh"]
+        ])
+
+    writer.writerow([])
+
+    # --------------------------------------------------
+    # HOURLY CONSUMPTION
+    # --------------------------------------------------
+
+    writer.writerow([
+        "HOURLY CONSUMPTION",
+        ""
+    ])
+
+    writer.writerow([
+        "Hour",
+        "Average consumption (kWh)"
+    ])
+
+    for item in usage_analytics["hourly"]:
+        average = item["average_kwh"]
+
+        writer.writerow([
+            f'{item["hour"]:02d}:00',
+            (
+                average
+                if average is not None
+                else "No data"
+            )
+    ])
+
     return response

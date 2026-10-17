@@ -1,1 +1,33 @@
-import DashboardShell from "./DashboardShell";import RequireAuth from "./RequireAuth";export default function Page({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <RequireAuth><DashboardShell><div className="mb-6"><h1 className="text-3xl font-bold tracking-tight">{title}</h1>{subtitle&&<p className="muted mt-1">{subtitle}</p>}</div>{children}</DashboardShell></RequireAuth>}
+
+import DashboardShell from "./DashboardShell";
+import RequireAuth from "./RequireAuth";
+
+export default function Page({
+    title,
+    subtitle,
+    children,
+}: {
+    title: string;
+    subtitle?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <RequireAuth>
+            <DashboardShell>
+                <div className="mb-6">
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {title}
+                    </h1>
+
+                    {subtitle && (
+                        <p className="muted mt-1">
+                            {subtitle}
+                        </p>
+                    )}
+                </div>
+
+                {children}
+            </DashboardShell>
+        </RequireAuth>
+    );
+}
